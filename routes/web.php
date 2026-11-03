@@ -118,6 +118,8 @@ Route::middleware('auth')->group(function () {
     // Recibos para la impresora térmica + instalador del equipo POS (ver _impresora-recibos).
     Route::get('/caja/ventas/{venta}/recibo', [ReciboVentaController::class, 'show'])->name('caja.venta.recibo');
     Route::get('/caja/recibo-de-prueba', [ReciboVentaController::class, 'prueba'])->name('caja.recibo.prueba');
+    // El cajón va conectado a la impresora y se abre con cada impresión: se imprime casi nada.
+    Route::view('/caja/abrir-cajon', 'caja.abrir-cajon')->name('caja.cajon');
     Route::get('/caja/instalador', InstaladorCajaController::class)->name('caja.instalador');
 
     Route::get('/caja/dashboard', [DashboardCajaController::class, 'index'])->name('caja-dashboard.index');

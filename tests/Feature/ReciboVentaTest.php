@@ -130,6 +130,30 @@ class ReciboVentaTest extends TestCase
         $this->assertDatabaseCount('ventas', 0);
     }
 
+    // ---------------------------------------------------------------- cajón del dinero
+
+    public function test_abrir_cajon_imprime_solo_un_punto_sin_fijar_la_hoja(): void
+    {
+        $html = $this->actingAs($this->user)->get(route('caja.cajon'))->assertOk()->getContent();
+
+        // El cajón se abre con cualquier impresión: un punto basta (una hoja en blanco el driver la recorta).
+        $this->assertStringContainsString('<div class="punto" data-cajon>.</div>', $html);
+        $this->assertStringContainsString('@page { margin: 0; }', $html);
+        $this->assertDoesNotMatchRegularExpression('/@page\s*\{[^}]*\bsize\s*:/', $html);
+        $this->assertDatabaseCount('ventas', 0);
+    }
+
+    public function test_caja_muestra_abrir_cajon_e_interruptor_de_recibo(): void
+    {
+        $this->venderOnces();
+
+        $this->actingAs($this->user)->get(route('caja.index'))
+            ->assertOk()
+            ->assertSee('Abrir cajón')
+            ->assertSee(str_replace('/', '\/', route('caja.cajon')), false)
+            ->assertSee('Imprimir recibo');
+    }
+
     // ---------------------------------------------------------------- instalador del equipo POS
 
     public function test_instalador_abre_la_caja_con_impresion_directa(): void
@@ -170,6 +194,7 @@ class ReciboVentaTest extends TestCase
 
         $this->actingAs($vendedor)->get(route('caja.venta.recibo', $venta))->assertOk()->assertSee('Recibo N.º '.$venta->id);
         $this->actingAs($vendedor)->get(route('caja.recibo.prueba'))->assertOk();
+        $this->actingAs($vendedor)->get(route('caja.cajon'))->assertOk();
         $this->actingAs($vendedor)->get(route('caja.instalador'))->assertOk();
     }
 

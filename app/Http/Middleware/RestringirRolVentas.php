@@ -22,6 +22,7 @@ class RestringirRolVentas
         'caja.venta.store',
         'caja.venta.recibo',
         'caja.recibo.prueba',
+        'caja.cajon',
         'caja.instalador',
         'profile.*',
         'logout',

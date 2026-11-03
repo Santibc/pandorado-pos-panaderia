@@ -45,7 +45,10 @@
 
                 <x-slot:footer>
                     <div class="flex items-center justify-between gap-3">
-                        @include('caja._boton-impresora')
+                        <div class="flex items-center gap-2">
+                            @include('caja._boton-impresora')
+                            @include('caja._boton-cajon')
+                        </div>
                         <button type="submit" form="form-abrir-caja"
                                 class="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-primary-500 hover:bg-primary-600 active:bg-primary-700 text-white text-base font-semibold shadow-soft transition-colors">
                             <x-icon name="play" class="w-5 h-5" />
@@ -138,6 +141,7 @@
                                 <input x-model="search" type="text" placeholder="Buscar..."
                                        class="block w-full rounded-xl border-cream-300 bg-white pl-8 pr-3 py-2 text-sm focus:border-primary-500 focus:ring-2 focus:ring-primary-500/30 dark:bg-cream-900/40 dark:border-cream-700 dark:text-cream-100">
                             </div>
+                            @include('caja._boton-cajon')
                             @include('caja._boton-impresora')
                             {{-- Toggle de la info del turno --}}
                             <button type="button" @click="infoOpen = !infoOpen"
@@ -280,12 +284,15 @@
 
                                     {{-- Monto + quitar --}}
                                     <div class="flex items-center gap-1.5">
+                                        {{-- Sale vacío para escribir lo que entrega el cliente; con un solo
+                                             método, si se deja vacío se cobra el total (el placeholder lo muestra). --}}
                                         <div class="flex-1 relative">
                                             <span class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-2 text-cream-500 text-xs font-semibold">$</span>
                                             <input type="text" inputmode="numeric"
                                                    :value="p.monto > 0 ? p.monto.toLocaleString('es-CO') : ''"
                                                    @input="p.monto = parseInt(($event.target.value || '').replace(/\D/g,'') || '0', 10); $event.target.value = p.monto > 0 ? p.monto.toLocaleString('es-CO') : ''"
-                                                   placeholder="0"
+                                                   :placeholder="pagos.length === 1 && total > 0 ? total.toLocaleString('es-CO') : '0'"
+                                                   :title="pagos.length === 1 ? 'Valor recibido. Vacío = el total' : 'Valor de este método'"
                                                    class="block w-full rounded-lg border-cream-300 bg-white pl-5 pr-2 py-1.5 text-sm focus:border-primary-500 focus:ring-1 focus:ring-primary-500/30 dark:bg-cream-900/40 dark:border-cream-700 dark:text-cream-100">
                                         </div>
 
@@ -353,7 +360,7 @@
                 <template x-for="(p, i) in pagos" :key="'p'+i">
                     <div>
                         <input type="hidden" :name="'pagos[' + i + '][metodo_pago_id]'" :value="p.metodo_pago_id">
-                        <input type="hidden" :name="'pagos[' + i + '][monto]'" :value="p.monto">
+                        <input type="hidden" :name="'pagos[' + i + '][monto]'" :value="montoDe(p)">
                     </div>
                 </template>
                 <input type="hidden" name="notas" :value="notas">
@@ -472,11 +479,10 @@
                     this.pagos.push({ metodo_pago_id: def.id, monto: 0, referencia: '' });
                 }
 
-                // Con un único método de pago, el monto sigue automáticamente al total
-                // del carrito (al agregar/quitar items o al quedar un solo método).
-                this.$watch('total', () => this.autoMontoPagoUnico());
-                this.$watch('pagos.length', () => this.autoMontoPagoUnico());
-                this.autoMontoPagoUnico();
+                // Al quedar un solo método (o vaciar el carrito) el valor vuelve a quedar vacío,
+                // o sea, el total (montoDe).
+                this.$watch('pagos.length', (n) => { if (n === 1) this.pagos[0].monto = 0; });
+                this.$watch('cart.length', (n) => { if (n === 0) this.pagos.forEach(p => p.monto = 0); });
 
                 // Restaurar la categoría seleccionada tras una recarga (ej. al cobrar
                 // una venta el POST recarga la página y el estado de Alpine se reinicia).
@@ -491,9 +497,10 @@
                 });
             },
 
-            // Si solo hay un método de pago, su monto = total del carrito.
-            autoMontoPagoUnico() {
-                if (this.pagos.length === 1) this.pagos[0].monto = this.total;
+            // Valor que se cobra en un pago: con un solo método y el campo vacío, el total.
+            montoDe(p) {
+                const monto = parseInt(p.monto) || 0;
+                return this.pagos.length === 1 && monto === 0 ? this.total : monto;
             },
 
             get itemsFiltrados() {
@@ -520,14 +527,14 @@
             get sumNoEfectivo() {
                 return this.pagos.reduce((s, p) => {
                     const m = this.metodos.find(x => x.id == p.metodo_pago_id);
-                    if (m && !m.es_efectivo) return s + (parseInt(p.monto) || 0);
+                    if (m && !m.es_efectivo) return s + this.montoDe(p);
                     return s;
                 }, 0);
             },
             get sumEfectivoPago() {
                 return this.pagos.reduce((s, p) => {
                     const m = this.metodos.find(x => x.id == p.metodo_pago_id);
-                    if (m && m.es_efectivo) return s + (parseInt(p.monto) || 0);
+                    if (m && m.es_efectivo) return s + this.montoDe(p);
                     return s;
                 }, 0);
             },
@@ -537,7 +544,7 @@
             get puedeSubmitir() {
                 if (this.cart.length === 0 || this.total <= 0) return false;
                 if (this.pagos.length === 0) return false;
-                if (!this.pagos.every(p => p.metodo_pago_id && p.monto > 0)) return false;
+                if (!this.pagos.every(p => p.metodo_pago_id && this.montoDe(p) > 0)) return false;
                 if (this.sumNoEfectivo > this.total) return false;
                 if (this.sumEfectivoPago < this.efectivoRequerido) return false;
                 return true;

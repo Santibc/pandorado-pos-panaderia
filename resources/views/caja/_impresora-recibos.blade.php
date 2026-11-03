@@ -4,6 +4,8 @@
       - activa:         al cobrar, el recibo se imprime solo.
       - desactivada:    se cobra sin imprimir y sin preguntar.
       - sin-configurar: (por defecto) al cobrar pregunta si seguir sin imprimir.
+    Aparte, «Imprimir recibo» (recibo: false) cobra sin recibo pero deja la impresora para abrir
+    el cajón del dinero, que va conectado a ella y se abre con cada impresión (caja.cajon).
     Una página web no puede ver ni elegir las impresoras de Windows: el recibo sale por la
     predeterminada. Para que salga sin la ventana de impresión, Chrome debe abrirse con
     --kiosk-printing, y eso lo hace el ícono que crea el instalador (InstaladorCajaService).
@@ -14,12 +16,14 @@
         <div class="space-y-2">
             <div x-show="estado === 'activa'">
                 <x-alert variant="success" title="Lista en este equipo">
-                    Al cobrar, el recibo sale solo por la impresora.
+                    <span x-show="recibo">Al cobrar, el recibo sale solo por la impresora.</span>
+                    <span x-show="!recibo" x-cloak>Al cobrar no se imprime recibo. El cajón se abre con «Abrir cajón».</span>
                 </x-alert>
             </div>
             <div x-show="estado === 'sin-configurar'">
                 <x-alert variant="warning" title="Sin configurar en este equipo">
-                    Al cobrar se pregunta si quieres seguir sin imprimir el recibo.
+                    <span x-show="recibo">Al cobrar se pregunta si quieres seguir sin imprimir el recibo.</span>
+                    <span x-show="!recibo" x-cloak>Para usar la impresora y el cajón, haz la prueba de abajo.</span>
                 </x-alert>
             </div>
             <div x-show="estado === 'desactivada'" x-cloak>
@@ -30,6 +34,13 @@
             <p class="text-xs text-cream-600 dark:text-cream-400">
                 Esto se guarda solo en este equipo: configúralo en el equipo que tiene la impresora conectada.
             </p>
+        </div>
+
+        <div x-show="estado !== 'desactivada'" class="rounded-xl border border-cream-200 p-3 dark:border-cream-800">
+            <x-toggle id="caja-imprimir-recibo" label="Imprimir recibo"
+                      description="Al cobrar sale el recibo. Apágalo para cobrar sin recibo: el cajón se abre con «Abrir cajón»."
+                      x-init="on = window.impresoraRecibos.imprimeRecibo()"
+                      x-on:change="window.impresoraRecibos.guardar({ recibo: $event.target.checked })" />
         </div>
 
         <section class="space-y-2">
@@ -119,6 +130,8 @@
                 try { localStorage.setItem(CLAVE, JSON.stringify(Object.assign(leer(), cambios))); } catch (e) {}
                 avisar();
             },
+            // Por defecto sí: solo se apaga con el interruptor «Imprimir recibo».
+            imprimeRecibo() { return leer().recibo !== false; },
             ultimoRecibo() { try { return localStorage.getItem(CLAVE_ULTIMO); } catch (e) { return null; } },
 
             // Con el import ESM, Preline no deja HSOverlay en window: se usa el botón que abre el modal.
@@ -141,7 +154,7 @@
                         let impreso = false;
                         try {
                             // Sin recibo (error, sesión vencida) no se imprime otra página.
-                            if (win && win.document.querySelector('[data-recibo]')) {
+                            if (win && win.document.querySelector('[data-recibo], [data-cajon]')) {
                                 await win.document.fonts.ready;
                                 win.focus();
                                 win.print();
@@ -159,15 +172,27 @@
             async imprimirVenta(url) {
                 try { localStorage.setItem(CLAVE_ULTIMO, url); } catch (e) {}
                 avisar();
-                if (this.estado() !== 'activa') return;
+                if (this.estado() !== 'activa' || !this.imprimeRecibo()) return;
                 if (!(await this.imprimir(url))) {
                     window.showToast?.('error', 'No se pudo imprimir el recibo. Reimprímelo desde «Impresora».');
                 }
             },
 
+            // Imprime un punto diminuto: el driver abre el cajón conectado a la impresora.
+            async abrirCajon(url) {
+                if (this.estado() === 'desactivada') {
+                    window.showToast?.('info', 'Este equipo no usa impresora: el cajón se abre con ella. Configúrala aquí.');
+                    this.abrirConfiguracion();
+                    return;
+                }
+                if (!(await this.imprimir(url))) {
+                    window.showToast?.('error', 'No se pudo abrir el cajón. Revisa que la impresora esté prendida.');
+                }
+            },
+
             // Antes de cobrar: true = seguir con el cobro.
             async confirmarCobro() {
-                if (this.estado() !== 'sin-configurar') return true;
+                if (this.estado() !== 'sin-configurar' || !this.imprimeRecibo()) return true;
 
                 const respuesta = await window.Swal.fire({
                     icon: 'warning',
@@ -205,9 +230,15 @@
     // Botón de estado (punto verde / ámbar / gris) junto a la caja.
     window.impresoraEstado = () => ({
         estado: window.impresoraRecibos.estado(),
-        init() { window.addEventListener('impresora-cambio', () => { this.estado = window.impresoraRecibos.estado(); }); },
+        recibo: window.impresoraRecibos.imprimeRecibo(),
+        init() {
+            window.addEventListener('impresora-cambio', () => {
+                this.estado = window.impresoraRecibos.estado();
+                this.recibo = window.impresoraRecibos.imprimeRecibo();
+            });
+        },
         get etiqueta() {
-            return { activa: 'Impresora lista', desactivada: 'Este equipo no imprime recibos', 'sin-configurar': 'Impresora sin configurar' }[this.estado];
+            return { activa: this.recibo ? 'Impresora lista' : 'Impresora lista · cobra sin recibo', desactivada: 'Este equipo no imprime recibos', 'sin-configurar': 'Impresora sin configurar' }[this.estado];
         },
         get punto() {
             return { activa: 'bg-emerald-500', desactivada: 'bg-cream-400 dark:bg-cream-600', 'sin-configurar': 'bg-amber-500' }[this.estado];
@@ -216,6 +247,7 @@
 
     window.impresoraModal = (urlPrueba) => ({
         estado: 'sin-configurar',
+        recibo: true,
         ultimo: null,
         paso: null, // probando | preguntar | ayuda | error
         init() {
@@ -224,6 +256,7 @@
         },
         leer() {
             this.estado = window.impresoraRecibos.estado();
+            this.recibo = window.impresoraRecibos.imprimeRecibo();
             this.ultimo = window.impresoraRecibos.ultimoRecibo();
         },
         async probar() {
