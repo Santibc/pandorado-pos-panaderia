@@ -1,38 +1,70 @@
-# El Pan Dorado DC
+# El Pan Dorado DC — POS de panadería con equipo de caja dedicado
 
-Aplicacion web base construida sobre Laravel 9 con autenticacion, gestion de perfil, layout con sidebar y modo oscuro/claro listos para extender.
+Sistema de caja, inventario y finanzas para una panadería en Bogotá, con su página web editable desde el panel y un equipo POS en modo kiosco con impresora de recibos.
+
+![Página web pública (editable desde el panel)](docs/screenshots/01-pagina-web.png)
+
+## Contexto
+
+Variante del sistema de restaurantes (ver Dorilokos / Sopas y Sopitas) adaptada a una panadería que atiende en mostrador con un equipo táctil dedicado, impresora térmica de 58 mm y cajón monedero.
+
+## Funcionalidades
+
+- **Caja (POS)** con turnos, base, ventas por categorías y métodos de pago.
+- **Equipo POS en modo kiosco:** instalador para Windows, pantalla completa, teclado en pantalla solo cuando no hay teclado físico.
+- **Impresión de recibos** en impresora térmica de 58 mm al cobrar y botón para **abrir el cajón monedero**.
+- **Módulo “Página web”:** el negocio edita textos, fotos, productos, horarios, proceso y galería de su landing pública desde el panel.
+- **Mercado e inventario** vinculado a la caja, **gastos fijos** y **consolidado** de ingresos y egresos.
+- Eliminación lógica (*soft delete*) de categorías y productos para no romper el histórico.
+- Roles: administrador y ventas (solo caja).
 
 ## Stack
 
-- Laravel 9 (PHP 8.0+)
-- Vite, Alpine.js, Tailwind CSS, Bootstrap 5
-- MySQL (XAMPP en Windows)
-- Laravel Breeze (auth) + Spatie Laravel-Permission (roles)
+- **Backend:** PHP 8, Laravel 9, MySQL/MariaDB
+- **Autenticación y permisos:** Laravel Breeze + spatie/laravel-permission (roles y permisos)
+- **Frontend:** Blade, Alpine.js, Tailwind CSS, Preline UI, ApexCharts, GSAP, Lenis, Tom Select
 
-## Configuracion inicial
+## Capturas
+
+**Dashboard**
+
+![Dashboard](docs/screenshots/02-dashboard.png)
+
+**Caja con impresora y cajón monedero**
+
+![Caja con impresora y cajón monedero](docs/screenshots/03-caja-pos.png)
+
+**Dashboard de caja**
+
+![Dashboard de caja](docs/screenshots/04-dashboard-caja.png)
+
+## Arquitectura
+
+Este sistema forma parte de una familia de aplicaciones para restaurantes que comparten el mismo núcleo (caja, menú, mercado, inventario, nómina y finanzas) y se despliegan por separado para cada negocio, cada uno con su identidad visual y ajustes propios. La lógica de negocio vive en servicios (`app/Services`), los controladores se mantienen delgados y los assets se compilan con Vite para desplegar en hosting compartido sin Node en el servidor.
+
+## Instalación local
+
+Requisitos: PHP 8.0+ (con extensiones `gd`, `zip`, `intl`), Composer, Node 18+ y MySQL/MariaDB.
 
 ```bash
+git clone <url-del-repositorio>
+cd pandoradodc
 composer install
-npm install
-cp .env.example .env   # si aun no existe
+npm install && npm run build
+cp .env.example .env        # configura la conexión a la base de datos
 php artisan key:generate
-php artisan migrate:fresh --seed
-npm run dev
+php artisan migrate --seed
 php artisan serve
 ```
 
-Usuario por defecto: `admin@admin.com` / `12345678` (rol `admin`).
+La aplicación queda disponible en `http://localhost:8000`. Los seeders crean los roles y datos iniciales (revisa `database/seeders`).
 
-## Comandos utiles
+## Notas
 
-```bash
-/dev-start                          # XAMPP + Laravel + Vite + Chrome
-/dev-stop                           # Detener servicios
-php artisan migrate:fresh --seed    # BD limpia con admin
-php artisan test                    # Correr tests
-./vendor/bin/pint                   # Formatear codigo
-```
+- Proyecto desarrollado para un cliente real y desplegado en producción. Las capturas se tomaron en un entorno local; el historial de este repositorio se depuró para no incluir credenciales ni copias de bases de datos.
 
-## Documentacion
+## Autor
 
-Convenciones del proyecto y reglas para nuevos modulos (incluyendo soporte obligatorio de modo claro/oscuro) en [CLAUDE.md](CLAUDE.md).
+**Santiago Bellaizán** — Desarrollador Full Stack (Laravel · PHP · MySQL · JavaScript)
+
+- GitHub: [@Santibc](https://github.com/Santibc)
